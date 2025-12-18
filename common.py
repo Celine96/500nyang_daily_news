@@ -219,9 +219,11 @@ def filter_real_estate_news(title: str, description: str) -> dict:
         logging.warning("⚠️ OPENAI_API_KEY not set - using keyword filtering")
         return filter_by_keywords(title, description)
     
-    system_prompt = """당신은 부동산 뉴스 필터링 전문가입니다.
+    system_prompt = """당신은 부동산 뉴스 필터링 및 분류 전문가입니다.
 
-기사 제목과 설명을 보고 이것이 "부동산과 관련이 있는지" 판단하세요.
+기사 제목과 설명을 보고:
+1. 부동산과 관련이 있는지 판단
+2. 부동산 뉴스라면 어떤 카테고리에 속하는지 분류
 
 ✅ 부동산 관련 기사:
 - 아파트, 오피스텔, 상가, 토지 등 부동산 매매/임대
@@ -239,6 +241,14 @@ def filter_real_estate_news(title: str, description: str) -> dict:
 - 정치, 사회, 문화 이슈
 - 건설사 실적이지만 부동산과 직접 연관 없음
 
+📂 카테고리 분류 기준:
+1. "정책·제도": 정부 정책, 법안, 규제, 제도 개편
+2. "시장 동향·시황": 가격 변동, 거래량, 시장 분석
+3. "분양·청약": 아파트 분양, 청약, 입주
+4. "개발·재건축·재개발": 재건축, 재개발, 신규 개발
+5. "금융·대출·금리": 주택담보대출, 금리, DSR/LTV
+6. "세금·법률·규제": 취득세, 양도세, 종부세, 법률 이슈
+
 JSON 형식으로 응답:
 {
   "is_relevant": true/false,
@@ -247,6 +257,7 @@ JSON 형식으로 응답:
   "region": "지역명" or null,
   "has_price": true/false,
   "has_policy": true/false,
+  "category": "카테고리명" or null,
   "reason": "판단 근거 1-2줄"
 }"""
 
@@ -311,6 +322,7 @@ def filter_by_keywords(title: str, description: str) -> dict:
         'region': region,
         'has_price': any(kw in text for kw in ['가격', '시세', '억', '만원', '상승', '하락']),
         'has_policy': any(kw in text for kw in ['정책', '규제', '세금', '대출', '금리']),
+        'category': None,  # 키워드 필터는 카테고리 분류 안함
         'reason': f'키워드 매칭 기반 ({matched}개 매칭)'
     }
 
@@ -603,6 +615,7 @@ def init_google_sheets():
                 gsheet_worksheet.insert_row([
                     'timestamp', 'title', 'description', 'url',
                     'is_relevant', 'relevance_score', 'keywords', 'region',
+                    'category',
                     'has_price', 'has_policy', 'reason', 'user_id'
                 ], 1)
                 logger.info("   ✅ Google Sheets 헤더 생성")
@@ -612,6 +625,7 @@ def init_google_sheets():
                 gsheet_worksheet.insert_row([
                     'timestamp', 'title', 'description', 'url',
                     'is_relevant', 'relevance_score', 'keywords', 'region',
+                    'category',
                     'has_price', 'has_policy', 'reason', 'user_id'
                 ], 1)
             except:
@@ -693,6 +707,7 @@ def init_csv_file():
                 writer.writerow([
                     'timestamp', 'title', 'description', 'url',
                     'is_relevant', 'relevance_score', 'keywords', 'region',
+                    'category',
                     'has_price', 'has_policy', 'reason', 'user_id'
                 ])
             logger.info(f"✅ CSV file created: {CSV_FILE_PATH}")
@@ -715,6 +730,7 @@ def save_news_to_csv(news_data: dict):
                 news_data.get('relevance_score', 0),
                 ', '.join(news_data.get('keywords', [])),
                 news_data.get('region', ''),
+                news_data.get('category', ''),
                 news_data.get('has_price', False),
                 news_data.get('has_policy', False),
                 news_data.get('reason', ''),
@@ -741,6 +757,7 @@ def save_news_to_gsheet(news_data: dict):
             news_data.get('relevance_score', 0),
             ', '.join(news_data.get('keywords', [])),
             news_data.get('region', ''),
+            news_data.get('category', ''),
             news_data.get('has_price', False),
             news_data.get('has_policy', False),
             news_data.get('reason', ''),
@@ -773,6 +790,7 @@ async def save_all_news_background(news_items: list, user_id: str):
                 news_item['relevance_score'] = 50
                 news_item['keywords'] = []
                 news_item['region'] = ''
+                news_item['category'] = ''
                 news_item['has_price'] = False
                 news_item['has_policy'] = False
                 news_item['reason'] = 'Filtering module not available'
