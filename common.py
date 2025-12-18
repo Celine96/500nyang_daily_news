@@ -549,23 +549,52 @@ def init_google_sheets():
         logger.error("❌ gspread not installed")
         return False
     
-    if not GOOGLE_SHEETS_CREDENTIALS or not GOOGLE_SHEETS_SPREADSHEET_ID:
-        logger.error("❌ Google Sheets 환경변수 미설정")
+    # 환경변수 체크
+    if not GOOGLE_SHEETS_CREDENTIALS:
+        logger.error("❌ GOOGLE_SHEETS_CREDENTIALS 환경변수 미설정")
+        return False
+    
+    if not GOOGLE_SHEETS_SPREADSHEET_ID:
+        logger.error("❌ GOOGLE_SHEETS_SPREADSHEET_ID 환경변수 미설정")
         return False
     
     try:
         logger.info("🔄 Initializing Google Sheets...")
+        logger.info(f"   환경변수 길이: CREDENTIALS={len(GOOGLE_SHEETS_CREDENTIALS)} chars")
+        logger.info(f"   Spreadsheet ID: {GOOGLE_SHEETS_SPREADSHEET_ID}")
         
-        creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
+        # JSON 파싱
+        try:
+            creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
+            logger.info(f"   ✅ JSON 파싱 성공")
+            logger.info(f"   Service Account: {creds_dict.get('client_email', 'N/A')}")
+        except json.JSONDecodeError as je:
+            logger.error(f"❌ JSON 파싱 실패: {je}")
+            logger.error(f"   환경변수 앞부분 (처음 200자): {GOOGLE_SHEETS_CREDENTIALS[:200]}")
+            return False
+        
+        # 인증
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
         credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         gsheet_client = gspread.authorize(credentials)
+        logger.info(f"   ✅ 인증 성공")
         
-        spreadsheet = gsheet_client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
-        gsheet_worksheet = spreadsheet.sheet1
+        # 스프레드시트 열기
+        try:
+            spreadsheet = gsheet_client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
+            gsheet_worksheet = spreadsheet.sheet1
+            logger.info(f"   ✅ 스프레드시트 연결: {spreadsheet.title}")
+        except gspread.exceptions.SpreadsheetNotFound:
+            logger.error(f"❌ 스프레드시트를 찾을 수 없습니다 (ID: {GOOGLE_SHEETS_SPREADSHEET_ID})")
+            logger.error(f"   서비스 계정 이메일({creds_dict.get('client_email')})을")
+            logger.error(f"   스프레드시트에 공유했는지 확인하세요!")
+            return False
+        except gspread.exceptions.APIError as ae:
+            logger.error(f"❌ Google Sheets API 오류: {ae}")
+            return False
         
         # 헤더 확인 및 생성
         try:
@@ -576,19 +605,30 @@ def init_google_sheets():
                     'is_relevant', 'relevance_score', 'keywords', 'region',
                     'has_price', 'has_policy', 'reason', 'user_id'
                 ], 1)
-                logger.info("✅ Google Sheets headers created")
-        except:
-            gsheet_worksheet.insert_row([
-                'timestamp', 'title', 'description', 'url',
-                'is_relevant', 'relevance_score', 'keywords', 'region',
-                'has_price', 'has_policy', 'reason', 'user_id'
-            ], 1)
+                logger.info("   ✅ Google Sheets 헤더 생성")
+        except Exception as he:
+            logger.warning(f"⚠️ 헤더 생성 시도 중 오류: {he}")
+            try:
+                gsheet_worksheet.insert_row([
+                    'timestamp', 'title', 'description', 'url',
+                    'is_relevant', 'relevance_score', 'keywords', 'region',
+                    'has_price', 'has_policy', 'reason', 'user_id'
+                ], 1)
+            except:
+                pass
         
-        logger.info(f"✅ Google Sheets initialized")
+        logger.info(f"✅ Google Sheets 초기화 완료")
         return True
         
+    except ImportError as ie:
+        logger.error(f"❌ 라이브러리 import 실패: {ie}")
+        logger.error(f"   requirements.txt에 gspread, google-auth가 포함되어 있는지 확인하세요")
+        return False
+        
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Google Sheets: {e}")
+        import traceback
+        logger.error(f"❌ Google Sheets 초기화 실패: {type(e).__name__}: {str(e)}")
+        logger.error(f"\n전체 에러 스택:\n{traceback.format_exc()}")
         return False
 
 def get_recent_urls_from_gsheet(hours: int = 3) -> set:
