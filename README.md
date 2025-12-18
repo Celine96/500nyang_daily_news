@@ -1,5 +1,5 @@
 # 500nyang_daily_news
-오대리(500냥) 부동산 뉴스 
+오대리(500냥) 부동산 뉴스 크롤러 
 
 
 ![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github)
