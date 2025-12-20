@@ -313,6 +313,21 @@ def filter_by_keywords(title: str, description: str) -> dict:
     keywords = [kw for kw in real_estate_keywords if kw in text][:5]
     region = extract_region(text)
     
+    # 키워드 기반 간단한 카테고리 분류
+    category = None
+    if any(kw in text for kw in ['정책', '법안', '규제', '국토부', '정부']):
+        category = '정책·제도'
+    elif any(kw in text for kw in ['분양', '청약', '입주', '모델하우스']):
+        category = '분양·청약'
+    elif any(kw in text for kw in ['재건축', '재개발', '정비구역', '개발']):
+        category = '개발·재건축·재개발'
+    elif any(kw in text for kw in ['주담대', '대출', '금리', 'dsr', 'ltv']):
+        category = '금융·대출·금리'
+    elif any(kw in text for kw in ['종부세', '양도세', '취득세', '세금', '과세']):
+        category = '세금·법률·규제'
+    elif any(kw in text for kw in ['시세', '가격', '상승', '하락', '거래량', '집값']):
+        category = '시장 동향·시황'
+    
     logging.info(f"🔑 키워드 필터 (점수: {score}) - {title[:40]}...")
     
     return {
@@ -322,7 +337,7 @@ def filter_by_keywords(title: str, description: str) -> dict:
         'region': region,
         'has_price': any(kw in text for kw in ['가격', '시세', '억', '만원', '상승', '하락']),
         'has_policy': any(kw in text for kw in ['정책', '규제', '세금', '대출', '금리']),
-        'category': None,  # 키워드 필터는 카테고리 분류 안함
+        'category': category,  # 키워드 기반 간단 분류 추가
         'reason': f'키워드 매칭 기반 ({matched}개 매칭)'
     }
 
